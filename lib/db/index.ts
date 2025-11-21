@@ -14,6 +14,7 @@ export function initDb() {
   connections.push(conn);
 
   // Create tables if they don't exist
+  // SEC-301
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +24,8 @@ export function initDb() {
       last_name TEXT NOT NULL,
       phone_number TEXT NOT NULL,
       date_of_birth TEXT NOT NULL,
-      ssn TEXT NOT NULL,
+      ssn_hash TEXT NOT NULL,
+      ssn_last4 TEXT NOT NULL,
       address TEXT NOT NULL,
       city TEXT NOT NULL,
       state TEXT NOT NULL,

@@ -9,7 +9,8 @@ export const users = sqliteTable("users", {
   lastName: text("last_name").notNull(),
   phoneNumber: text("phone_number").notNull(),
   dateOfBirth: text("date_of_birth").notNull(),
-  ssn: text("ssn").notNull(),
+  ssnHash: text("ssn_hash").notNull(), // SEC-301
+  ssnLast4: text("ssn_last4").notNull(), // SEC-301
   address: text("address").notNull(),
   city: text("city").notNull(),
   state: text("state").notNull(),

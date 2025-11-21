@@ -1,6 +1,6 @@
 # SecureBank Technical Take-Home
 **Author:** Regis Zhao  
-**Date:** YYYY-MM-DD  
+**Date:** 2025-11-21  
 
 ---
 
@@ -200,13 +200,23 @@
 
 **Description:** SSNs stored in plaintext.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The `users` table contained an `ssn` TEXT column and the signup flow inserted the raw SSN value directly into the database. This allowed SSNs to be stored in plaintext at rest.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Replaced the plaintext `ssn` column with `ssn_hash` and `ssn_last4` in the application schema and DB creation SQL. `ssn_hash` stores an HMAC-SHA256 of the SSN using a server-side secret (`SSN_HASH_SECRET`) and `ssn_last4` stores only the last 4 digits for display purposes.
+- Updated the signup flow (`server/routers/auth.ts`) to compute the HMAC and store `ssn_hash` and `ssn_last4` instead of the plaintext SSN. The system now requires `SSN_HASH_SECRET` to be set; signup will fail if it is missing.
+- In development, a simple secret key is used in `.env`. In production, a secure random key should be set in environment variables.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Never store plaintext sensitive identifiers (SSNs, full credit card numbers, etc.). Store only irreversible hashes or encrypted values and limit who can access them.
+- Use a keyed HMAC or envelope encryption with an external key management system for production.
+- Require the hashing/encryption secret via environment variable and keep it in a secure vault.
+- Add code review and automated scans to detect plaintext PII in code and schema changes.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Signup flow now stores `ssn_hash` and `ssn_last4` in the `users` table; the `ssn` column no longer exists.
+- Manual verification: create a new user and confirm `users` row contains `ssn_hash` (hex) and `ssn_last4` (4 digits), and that no plaintext SSN is present in DB.
+- Recommended: run an automated scan of existing DB to detect any residual plaintext SSNs and perform a migration to replace them with hashed values.
 
 ---
 

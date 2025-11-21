@@ -1,6 +1,7 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
@@ -36,9 +37,30 @@ export const authRouter = router({
 
       const hashedPassword = await bcrypt.hash(input.password, 10);
 
+      // SEC-301
+      if (!process.env.SSN_HASH_SECRET) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "SSN hashing secret is not configured",
+        });
+      }
+
+      const ssnHash = crypto.createHmac("sha256", process.env.SSN_HASH_SECRET).update(input.ssn).digest("hex");
+      const ssnLast4 = input.ssn.slice(-4);
+
       await db.insert(users).values({
-        ...input,
+        email: input.email,
         password: hashedPassword,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phoneNumber: input.phoneNumber,
+        dateOfBirth: input.dateOfBirth,
+        ssnHash,
+        ssnLast4,
+        address: input.address,
+        city: input.city,
+        state: input.state,
+        zipCode: input.zipCode,
       });
 
       // Fetch the created user
