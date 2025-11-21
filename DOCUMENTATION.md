@@ -54,13 +54,21 @@
 
 **Description:** System accepts future birth dates.  
 
-**Root Cause:** _[Explain root cause]_  
+**Root Cause:** The signup form and server-side schema accepted any string for `dateOfBirth` without checking that it represented a valid date, wasn't in the future, or met minimum/maximum age constraints.
 
-**Fix Applied:** _[Explain fix, e.g., min/max date validation]_  
+**Fix Applied:**
+- Client-side: added validation in `app/signup/page.tsx` to ensure the `date` input is a valid date, not in the future, age is at least 18 (no minors) and at most 120 (no unrealistic ages). This provides immediate feedback in the UI.
+- Server-side: strengthened the Zod input schema in `server/routers/auth.ts` to enforce the same checks (valid date, not future, age between 18 and 120). Server-side validation is authoritative and prevents bypassing client checks.
 
-**Preventive Measures:** _[Validation policies]_  
+**Preventive Measures:**
+- Always perform input validation both client- and server-side; treat server-side validation as the source of truth.
+- Codify age-range rules in a shared validation module if multiple endpoints need the same logic.
+- Add unit tests for boundary conditions (exactly 18, 120, and future dates) and CI gates to prevent regressions.
 
-**Verification / Test:** _[Unit test or manual check]_
+**Verification / Test:**
+- Manual: attempt to register with a future DOB (e.g., next year) — client reject and server should also reject if bypassed.
+- Manual: attempt to register with DOB making age <18 or >120 — both client and server reject with clear messages.
+- Recommended: add unit/integration tests that assert server rejects invalid DOBs and accepts a valid DOB (exactly 18 years old should be accepted).
 
 ---
 

@@ -37,6 +37,18 @@ export default function SignupPage() {
 
   const password = watch("password");
 
+  // VAL-202
+  const calculateAge = (dateStr?: string | null) => {
+    if (!dateStr) return NaN;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return NaN;
+    const today = new Date();
+    let age = today.getFullYear() - d.getFullYear();
+    const m = today.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+    return age;
+  };
+
   const nextStep = async () => {
     let fieldsToValidate: (keyof SignupFormData)[] = [];
 
@@ -189,7 +201,16 @@ export default function SignupPage() {
                   Date of Birth
                 </label>
                 <input
-                  {...register("dateOfBirth", { required: "Date of birth is required" })}
+                  // VAL-202
+                  {...register("dateOfBirth", {
+                    required: "Date of birth is required",
+                    validate: {
+                      validDate: (v) => !isNaN(new Date(v).getTime()) || "Invalid date",
+                      notFuture: (v) => new Date(v) <= new Date() || "Date of birth cannot be in the future",
+                      minAge: (v) => calculateAge(v) >= 18 || "You must be at least 18 years old",
+                      maxAge: (v) => calculateAge(v) <= 120 || "Age must be 120 or less",
+                    },
+                  })}
                   type="date"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />

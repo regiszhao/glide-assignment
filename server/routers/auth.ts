@@ -8,6 +8,17 @@ import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+// VAL-202
+function calculateAgeFromISO(dateStr: string): number {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return NaN;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  return age;
+}
+
 export const authRouter = router({
   signup: publicProcedure
     .input(
@@ -17,7 +28,25 @@ export const authRouter = router({
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
-        dateOfBirth: z.string(),
+        // VAL-202
+        dateOfBirth: z
+          .string()
+          .refine((v) => {
+            const d = new Date(v);
+            return !isNaN(d.getTime());
+          }, { message: "Date of birth must be a valid date" })
+          .refine((v) => {
+            const d = new Date(v);
+            return d <= new Date();
+          }, { message: "Date of birth cannot be in the future" })
+          .refine((v) => {
+            const age = calculateAgeFromISO(v);
+            return age >= 18;
+          }, { message: "You must be at least 18 years old" })
+          .refine((v) => {
+            const age = calculateAgeFromISO(v);
+            return age <= 120;
+          }, { message: "Age must be 120 or less" }),
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
