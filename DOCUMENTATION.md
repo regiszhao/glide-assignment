@@ -226,13 +226,21 @@
 
 **Description:** Account numbers generated with `Math.random()`.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** Account numbers were produced using `Math.random()`, which is a non-cryptographic PRNG and can be predictable in certain circumstances. Predictable account numbers increase risk of enumeration and targeted fraud.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Replaced `Math.random()`-based generation with Node's `crypto.randomInt(0, 10_000_000_000)` to produce a uniformly distributed 10-digit account number. The change is in `server/routers/account.ts` in `generateAccountNumber()`.
+- Existing uniqueness checks remain in place (the code still verifies generated numbers are not already present in the DB and retries when necessary), so the change preserves behavior while improving unpredictability.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Use cryptographically secure random functions (Node's `crypto` APIs or a dedicated RNG/KMS) for any security-sensitive identifiers.
+- Limit information leaked about ID formats and avoid sequential or easily guessable identifiers.
+- Add a code review or lint rule to flag uses of `Math.random()` in server-side code where unpredictability matters.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Create multiple accounts and inspect the generated `account_number` values — they should look uniformly random and non-sequential.
+- Optionally run a statistical test on a batch of generated numbers to ensure distribution.
+- Confirm uniqueness by attempting to create multiple accounts quickly; the existing uniqueness loop should prevent duplicates.
 
 ---
 
