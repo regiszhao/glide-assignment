@@ -242,13 +242,27 @@
 
 **Description:** Unescaped HTML in transaction descriptions.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** Transaction descriptions were rendered into the DOM using `dangerouslySetInnerHTML` in the `TransactionList` component, which allowed untrusted input to be interpreted as HTML/JS and created a cross-site scripting (XSS) vector.
 
-**Fix Applied:** _[...]_  
+```
+transaction.description ? <span dangerouslySetInnerHTML={{ __html: transaction.description }} /> : "-"}
+```
 
-**Preventive Measures:** _[...]_  
+**Fix Applied:**
+- Replaced usage of `dangerouslySetInnerHTML` in `components/TransactionList.tsx` with plain-text rendering so React escapes any HTML. This prevents injected markup or scripts from executing in the browser.
+```
+{transaction.description ? <span>{transaction.description}</span> : "-"}
+```
+- Searched the codebase for other direct `innerHTML` or `dangerouslySetInnerHTML` uses; no other application source files use the unsafe pattern (only compiled `.next` artifacts).
 
-**Verification / Test:** _[...]_
+**Preventive Measures:**
+- Avoid `dangerouslySetInnerHTML` unless absolutely required and the HTML is produced by a trusted, sanitized source.
+- When rich text is required, use a safe HTML-sanitization library (e.g., `dompurify`) and apply sanitization server-side or during input processing. This method wasn't used for this ticket because the transaction descriptions did not require any formatting.
+- Add a linter rule or CI check to flag uses of `dangerouslySetInnerHTML` and similar APIs.
+
+**Verification / Test:**
+- Manual test: create a transaction with a description containing `<script>alert(1)</script>` and confirm the alert does not execute; the literal string should display instead.
+- Automated test recommendation: add an integration test that posts a transaction with HTML in the description and asserts no script execution (or that the returned HTML is escaped).
 
 ---
 
