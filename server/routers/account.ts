@@ -125,43 +125,50 @@ export const accountRouter = router({
         });
       }
 
-      // Create transaction
-      await db.insert(transactions).values({
-        accountId: input.accountId,
-        type: "deposit",
-        amount,
-        description: `Funding from ${input.fundingSource.type}`,
-        status: "completed",
-        processedAt: new Date().toISOString(),
+      // PERF-406
+      // Create transaction and update balance atomically inside a DB transaction to avoid races and ensure the returned balance is correct.
+      const nowIso = new Date().toISOString();
+
+      // Note: for the SQLite driver in this project the transaction callback must be synchronous (cannot return a Promise).
+      const { transaction: createdTransaction, newBalance } = db.transaction((tx) => {
+        // insert the transaction with explicit createdAt/processedAt
+        tx.insert(transactions).values({
+          accountId: input.accountId,
+          type: "deposit",
+          amount,
+          description: `Funding from ${input.fundingSource.type}`,
+          status: "completed",
+          createdAt: nowIso,
+          processedAt: nowIso,
+        }).run();
+
+        // PERF-404
+        // PERF-406
+        // fetch the inserted transaction for this account deterministically
+        const txRow = tx
+          .select()
+          .from(transactions)
+          .where(eq(transactions.accountId, input.accountId))
+          .orderBy(desc(transactions.createdAt), desc(transactions.id))
+          .limit(1)
+          .get();
+
+        // re-read the account inside the transaction to get the latest balance
+        const freshAccount = tx.select().from(accounts).where(eq(accounts.id, input.accountId)).get();
+
+        if (!freshAccount) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Account not found during update" });
+        }
+
+        // compute new balance rounded to cents to avoid floating-point drift
+        const newBalanceRaw = Number((freshAccount.balance + amount).toFixed(2));
+
+        tx.update(accounts).set({ balance: newBalanceRaw }).where(eq(accounts.id, input.accountId)).run();
+
+        return { transaction: txRow, newBalance: newBalanceRaw };
       });
 
-      // PERF-404
-      // Fetch the created transaction for this account (most recent)
-      const transaction = await db
-        .select()
-        .from(transactions)
-        .where(eq(transactions.accountId, input.accountId))
-        .orderBy(desc(transactions.createdAt), desc(transactions.id))
-        .limit(1)
-        .get();
-
-      // Update account balance
-      await db
-        .update(accounts)
-        .set({
-          balance: account.balance + amount,
-        })
-        .where(eq(accounts.id, input.accountId));
-
-      let finalBalance = account.balance;
-      for (let i = 0; i < 100; i++) {
-        finalBalance = finalBalance + amount / 100;
-      }
-
-      return {
-        transaction,
-        newBalance: finalBalance, // This will be slightly off due to float precision
-      };
+      return { transaction: createdTransaction, newBalance };
     }),
 
   getTransactions: protectedProcedure

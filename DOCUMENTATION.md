@@ -413,13 +413,29 @@ transaction.description ? <span dangerouslySetInnerHTML={{ __html: transaction.d
 
 **Description:** Account balances become incorrect after many transactions.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** Two main issues in `server/routers/account.ts` combined to produce incorrect balances:
+- Floating-point arithmetic producing cumulative rounding drift when adding many small amounts in the odd loop method used to calculate the final balance:
+```
+for (let i = 0; i < 100; i++) {
+    finalBalance = finalBalance + amount / 100;
+}
+```
+- Balance updates were performed non-atomically: the code read the current balance, computed a new balance, then updated the row. Under concurrent funding requests this allowed lost updates (read-modify-write races) and out-of-order writes.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Make funding an atomic operation by performing the transaction insert and balance update inside a single DB transaction (`db.transaction(...)`). This prevents race conditions where concurrent requests read the same balance.
+- Re-read the account's balance inside the DB transaction before computing the new balance, ensuring the update is based on the most recent value.
+- Round balances to two decimal places when computing and persisting them to avoid cumulative floating-point drift in presentation and storage. The code computes `Number((balance + amount).toFixed(2))` and persists that value.
+- Remove the weird loop that calculates the final balance.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Prefer storing monetary values as integer cents or use a fixed-point/decimal column type to avoid floating-point rounding issues.
+- Always perform money-related updates inside DB transactions and, where possible, use DB-side expressions (e.g., `UPDATE accounts SET balance = balance + ? WHERE id = ?`) to avoid read-modify-write races.
+- Add integration tests that perform many concurrent funding operations and assert the final stored balance matches the sum of all applied transactions.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: run many funding operations in rapid succession against an account and verify that `getTransactions` shows all entries and the account `balance` equals the sum of transactions (rounded to 2 decimals).
+- Automated: add a test harness that fires many concurrent requests against the `fundAccount` procedure and verifies the final persisted balance matches the expected total in cents.
 
 ---
 
