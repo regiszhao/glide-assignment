@@ -459,12 +459,24 @@ for (let i = 0; i < 100; i++) {
 **Priority:** Critical  
 **Reported by:** System Monitoring  
 
-**Description:** Database connections remain open.  
+**Description:** Database connections remain open.
 
-**Root Cause:** _[...]_  
+**Root Cause:** The application created multiple `better-sqlite3` `Database` instances (via `new Database(dbPath)`) during imports and pushed them into an array without ever closing them. Only one connection was actually used by Drizzle (`db`), so the extra connections leaked file descriptors.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Consolidated the DB initialization to a single long-lived `better-sqlite3` connection (`sqlite`) that is wrapped by Drizzle (`db`) and used across the app (`lib/db/index.ts`). Removed the unused `connections` array and prevented creating extra connections on import.
+- Added graceful shutdown handlers in `lib/db/index.ts` to close the SQLite connection on process exit or fatal signals (`SIGINT`, `SIGTERM`, `beforeExit`, `uncaughtException`, `unhandledRejection`). The shutdown handler calls `sqlite.close()` and logs the action.
+- Reviewed local scripts (e.g., `scripts/db-utils.js`) to ensure they call `db.close()`.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Use a single shared DB connection for long-lived server processes; avoid creating new DB connections per import or per request.
+- For serverless environments or short-lived CLI scripts, open and close `better-sqlite3` connections within the script scope and call `.close()` when finished.
+- Add monitoring and alerts for file descriptor growth and unexpected handle counts during load testing.
+- Add a lint rule or code-review checklist item to flag creation of raw DB connections outside `lib/db/index.ts`.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: start the dev server (`npm run dev`), then stop it with Ctrl+C and verify console shows "SQLite connection closed gracefully." Confirm no lingering processes have `bank.db` open (use `lsof` on Unix or appropriate tools on Windows).
+- Manual: run the app through a stress test that repeatedly imports code paths that would previously create new connections and observe the OS handle count — it should remain stable.
+- Automated: add an integration test or monitoring script that records open file descriptors before and after starting/stopping the server; assert no descriptor leak.
+
+**Files changed:** `lib/db/index.ts` — consolidated connection handling and added graceful shutdown logic.
