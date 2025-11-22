@@ -168,13 +168,22 @@
 
 **Description:** Password validation only checks length.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** Password validation on signup (`app/signup/page.tsx`) only enforced a minimum length and checks against common passwords; it lacked complexity rules (uppercase, lowercase, digit, symbol). This allows weak passwords that are easier to guess or brute-force.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Client-side: Enhanced form validation in `app/signup/page.tsx` to require a minimum length of 10 characters (instead of 8), at least one uppercase letter, one lowercase letter, one digit, one symbol. This provides immediate user feedback.
+- Server-side: Strengthened the Zod schema in `server/routers/auth.ts` to enforce the same rules. Server-side validation is authoritative and prevents bypassing client checks.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Enforce strong password requirements both client- and server-side.
+- Consider adding password strength meters and guidance to help users choose secure passwords.
+- Optionally implement rate limiting, account lockout, and encourage MFA for higher-risk accounts.
+- Maintain a larger denylist of compromised/common passwords (e.g., use a service or repo of known weak passwords).
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: Attempt to register with weak passwords (e.g., "password", "12345678", no uppercase, no symbol) — both client and server should reject them with clear messages.
+- Manual: Attempt to register with a compliant password (e.g., "Str0ng!Pass") — should be accepted.
+- Automated: Add unit/integration tests that validate enforcement and boundary cases.
 
 ---
 

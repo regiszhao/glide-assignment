@@ -112,16 +112,21 @@ export default function SignupPage() {
                 <input
                   {...register("password", {
                     required: "Password is required",
+                    // VAL-208
                     minLength: {
-                      value: 8,
-                      message: "Password must be at least 8 characters",
+                      value: 10,
+                      message: "Password must be at least 10 characters",
                     },
                     validate: {
                       notCommon: (value) => {
                         const commonPasswords = ["password", "12345678", "qwerty"];
                         return !commonPasswords.includes(value.toLowerCase()) || "Password is too common";
                       },
+                      // VAL-208
                       hasNumber: (value) => /\d/.test(value) || "Password must contain a number",
+                      hasUpper: (value) => /[A-Z]/.test(value) || "Password must contain an uppercase letter",
+                      hasLower: (value) => /[a-z]/.test(value) || "Password must contain a lowercase letter",
+                      hasSymbol: (value) => /[^A-Za-z0-9]/.test(value) || "Password must contain a symbol",
                     },
                   })}
                   type="password"

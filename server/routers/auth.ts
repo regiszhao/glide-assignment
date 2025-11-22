@@ -24,7 +24,18 @@ export const authRouter = router({
     .input(
       z.object({
         email: z.string().email().toLowerCase(),
-        password: z.string().min(8),
+        // VAL-208
+        password: z
+          .string()
+          .min(10, { message: "Password must be at least 10 characters" })
+          .refine((v) => /[a-z]/.test(v), { message: "Password must contain a lowercase letter" })
+          .refine((v) => /[A-Z]/.test(v), { message: "Password must contain an uppercase letter" })
+          .refine((v) => /\d/.test(v), { message: "Password must contain a number" })
+          .refine((v) => /[^A-Za-z0-9]/.test(v), { message: "Password must contain a symbol" })
+          .refine((v) => {
+            const common = ["password", "12345678", "qwerty"];
+            return !common.includes(v.toLowerCase());
+          }, { message: "Password is too common" }),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
