@@ -126,13 +126,23 @@
 
 **Description:** Invalid card numbers are accepted.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The system accepted any 16-digit string as a card number, with only minimal pattern checks on the client (in `components/FundingModal.tsx`) and no Luhn validation. These checks were also missing on the server-side (`server/routers/account.ts`). This allowed invalid or mistyped card numbers to be submitted, leading to failed transactions and poor user experience.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Wrote a Luhn algorithm check in `lib/utils/luhn.ts`
+- Client-side: Added Luhn check and strict 16-digit validation for card numbers in `components/FundingModal.tsx`. Users receive immediate feedback if the card number is invalid.
+- Server-side: Added Luhn check and 16-digit validation in the Zod schema for the `fundAccount` endpoint in `server/routers/account.ts`. This ensures only valid card numbers are accepted, even if client validation is bypassed.
+- Opted to remove prefix check. For this context, Luhn algorithm and length check should be sufficient for detecting invalid numbers. Using prefix checks in this context is less practical due to the wide variety of issuing banks and card types.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Always validate credit/debit card numbers using the Luhn algorithm and length checks on both client and server.
+- Add automated tests for common invalid card numbers and edge cases.
+- Consider using a payment processor's SDK for additional card validation and BIN checks.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: Try to fund an account with an invalid card number (wrong length, fails Luhn) — both client and server should reject it with a clear error.
+- Manual: Try a valid card number (e.g., 4111111111111111 for Visa test) — should be accepted.
+- Automated: Add unit/integration tests for the Luhn check and endpoint validation.
 
 ---
 

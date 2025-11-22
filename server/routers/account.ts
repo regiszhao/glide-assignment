@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
+// VAL-206
+import { luhnCheck } from "@/lib/utils/luhn";
 
 function generateAccountNumber(): string {
   // SEC-302
@@ -80,11 +82,23 @@ export const accountRouter = router({
       z.object({
         accountId: z.number(),
         amount: z.number().positive(),
-        fundingSource: z.object({
-          type: z.enum(["card", "bank"]),
-          accountNumber: z.string(),
-          routingNumber: z.string().optional(),
-        }),
+        // VAL-206
+        fundingSource: z
+          .object({
+            type: z.enum(["card", "bank"]),
+            accountNumber: z.string(),
+            routingNumber: z.string().optional(),
+          })
+          .refine((val) => {
+            if (val.type === "card") {
+              return /^\d{16}$/.test(val.accountNumber) && luhnCheck(val.accountNumber);
+            } else {
+              return /^\d+$/.test(val.accountNumber);
+            }
+          }, {
+            message: "Invalid card/account number (must be 16 digits and pass Luhn for cards)",
+            path: ["accountNumber"],
+          }),
       })
     )
     .mutation(async ({ input, ctx }) => {
