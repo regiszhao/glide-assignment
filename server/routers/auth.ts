@@ -114,6 +114,10 @@ export const authRouter = router({
       }
 
       // Create session
+      // SEC-304
+      // Invalidate other sessions for this user before creating a new one so logging in rotates sessions and prevents lingering tokens
+      await db.delete(sessions).where(eq(sessions.userId, user.id));
+
       const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || "temporary-secret-for-interview", {
         expiresIn: "7d",
       });
@@ -169,6 +173,10 @@ export const authRouter = router({
 
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
+
+      // SEC-304
+      // Invalidate other sessions for this user before creating a new one so logging in rotates sessions and prevents lingering tokens
+      await db.delete(sessions).where(eq(sessions.userId, user.id));
 
       await db.insert(sessions).values({
         userId: user.id,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
 import { AccountCreationModal } from "@/components/AccountCreationModal";
@@ -13,13 +13,29 @@ export default function DashboardPage() {
   const [fundingAccountId, setFundingAccountId] = useState<number | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
-  const { data: accounts, refetch: refetchAccounts } = trpc.account.getAccounts.useQuery();
+  // SEC-304
+  const { data: accounts, refetch: refetchAccounts, isError, error } = trpc.account.getAccounts.useQuery();
   const logoutMutation = trpc.auth.logout.useMutation();
 
   const handleLogout = async () => {
     await logoutMutation.mutateAsync();
     router.push("/");
   };
+
+  // SEC-304
+  // If the query reports the user is unauthorized (e.g. their session was invalidated), redirect back to the home page so the app doesn't remain on a protected route.
+  useEffect(() => {
+    if (isError) {
+      // tRPC errors expose a `data.code` string matching server TRPCError codes.
+      // Check for UNAUTHORIZED and navigate to the public home page.
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - `error` is typed as unknown by tRPC hooks here in some versions
+      const code = error?.data?.code || error?.shape?.data?.code;
+      if (code === "UNAUTHORIZED") {
+        router.push("/");
+      }
+    }
+  }, [isError, error, router]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {

@@ -307,20 +307,32 @@ transaction.description ? <span dangerouslySetInnerHTML={{ __html: transaction.d
 
 **Description:** Multiple valid sessions per user, no invalidation.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The authentication flow in `server/routers/auth.ts` created new session rows in the `sessions` table on every login or signup without invalidating previous sessions for the same user. There was no policy to rotate tokens or restrict concurrent sessions.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- On `signup` and `login`, the server now invalidates (deletes) any existing sessions for the user before creating a new session. This enforces a single active session per user and rotates tokens on new logins.
+```
+await db.delete(sessions).where(eq(sessions.userId, user.id));
+```
+- The `logout` endpoint continues to delete the session associated with the request's cookie/token.
+- Added a `useEffect` in `app/dashboard/page.tsx` that monitors the `getAccounts` query for errors (`isError`/`error`) and automatically redirects the user from `/dashboard` to `/` if the error indicates an `"UNAUTHORIZED"`
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Consider more flexible policies depending on requirements: allow multiple sessions but provide a user-facing session management UI that lists and revokes active sessions, or restrict to single-session as done here.
+- Implement server-side session introspection and a long-term session revocation list for immediate invalidation of leaked tokens.
+- Add monitoring to detect unusual session creation patterns (e.g., many new sessions for the same account in short time) and trigger alerts or rate limiting.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: login with account A in browser 1, then login with the same account in browser 2. Ensure the session token from browser 1 is invalidated (requests return unauthorized) and only browser 2 remains logged in.
+- Manual: after login, check `sessions` table — it should contain at most one active row per user.
+- Automated: add an integration test that logs in twice and asserts only a single session row exists for the user and the earlier token no longer grants access.
+
+**Files changed:** `server/routers/auth.ts` and `app/dashboard/page.tsx` — invalidate previous sessions on login/signup and redirect to homepage on those sessions
 
 ---
 
-## Logic & Performance Issues
-
 ### Ticket PERF-401: Account Creation Error
-**Priority:** Critical  
+**Priority:** Critical
 **Reported by:** Support Team  
 
 **Description:** New accounts show $100 balance when DB operations fail.  

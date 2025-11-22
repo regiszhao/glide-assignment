@@ -33,7 +33,8 @@ if (command === "list-users") {
     sessions.forEach((session) => {
       const isExpired = new Date(session.expires_at) < new Date();
       console.log(`User: ${session.email}, Expires: ${session.expires_at} ${isExpired ? "(EXPIRED)" : "(ACTIVE)"}`);
-      console.log(`Token: ${session.token.substring(0, 20)}...`);
+      // console.log(`Token: ${session.token.substring(0, 20)}...`);
+      console.log(`Token: ${session.token}`);
       console.log("---");
     });
   }
