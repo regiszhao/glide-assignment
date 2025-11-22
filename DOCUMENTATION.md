@@ -397,7 +397,7 @@ transaction.description ? <span dangerouslySetInnerHTML={{ __html: transaction.d
 
 **Description:** Not all transactions appear after multiple funding events.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** Having difficulties reproducing this bug. Tried funding accounts multiple times, as well as in rapid succession, but all transactions seem to be present. Will look into other methods or possible reasons why this bug is occurring.
 
 **Fix Applied:** _[...]_  
 
