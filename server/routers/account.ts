@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm"; // PERF-404
 import crypto from "crypto";
 // VAL-206
 import { luhnCheck } from "@/lib/utils/luhn";
@@ -135,8 +135,15 @@ export const accountRouter = router({
         processedAt: new Date().toISOString(),
       });
 
-      // Fetch the created transaction
-      const transaction = await db.select().from(transactions).orderBy(transactions.createdAt).limit(1).get();
+      // PERF-404
+      // Fetch the created transaction for this account (most recent)
+      const transaction = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(desc(transactions.createdAt), desc(transactions.id))
+        .limit(1)
+        .get();
 
       // Update account balance
       await db
@@ -178,10 +185,13 @@ export const accountRouter = router({
         });
       }
 
+      // PERF-404
+      // Return transactions for the account ordered newest first
       const accountTransactions = await db
         .select()
         .from(transactions)
-        .where(eq(transactions.accountId, input.accountId));
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(desc(transactions.createdAt), desc(transactions.id));
 
       const enrichedTransactions = [];
       for (const transaction of accountTransactions) {

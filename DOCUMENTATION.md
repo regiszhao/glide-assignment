@@ -373,13 +373,21 @@ transaction.description ? <span dangerouslySetInnerHTML={{ __html: transaction.d
 
 **Description:** Transaction order seems random.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The `fundAccount` handler previously fetched the "created" transaction using a global `orderBy(created_at)` call without specifying descending order or filtering by `accountId`. That query could return an unrelated row (oldest or global-most-recent) instead of the transaction just inserted for the user's account. The transaction listing endpoint also did not specify ordering, leading to unpredictable presentation order.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- When fetching the newly-created transaction, the code now filters by `accountId` and orders by `created_at` descending, then by `id` descending, then limits to 1. This reliably returns the transaction most recently inserted for that account.
+- The `getTransactions` endpoint now returns transactions ordered by `created_at` descending (newest-first) then by `id` descending so UI listing is deterministic.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Always filter and order queries explicitly when fetching recently inserted rows; prefer using `RETURNING` where supported to get the inserted row directly.
+- Avoid relying on default order; specify `ORDER BY` with direction in queries and API responses.
+- Add integration tests that create multiple transactions across accounts and assert each account's history contains only its own transactions in the expected order.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: perform multiple funding events on a single account and confirm all transactions appear in the account history in newest-first order.
+- Manual: perform concurrent funding events across multiple accounts and confirm each account's transaction history only contains its own transactions.
+- Recommended: add automated tests to cover batched/concurrent inserts and listing behavior.
 
 ---
 
