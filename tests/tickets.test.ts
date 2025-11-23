@@ -104,7 +104,12 @@ describe('Repository quick smoke checks for documented tickets', () => {
 
   it('PERF-402: logout verifies cookie via cookies.get or header parsing', () => {
     const auth = read('server/routers/auth.ts');
-    expect(auth).toContain("cookies.get('session')") || expect(auth).toContain('cookie');
+    // expect(auth).toContain("cookies.get('session')") || expect(auth).toContain('cookie');
+    try {
+      expect(auth).toContain("cookies.get('session')");
+    } catch {
+      expect(auth).toContain('cookie');
+    }
   });
 
   it('PERF-403: session expiry buffer is configurable', () => {
