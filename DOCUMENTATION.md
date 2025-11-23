@@ -505,7 +505,14 @@ token = (ctx.req as any).cookies.get('session')?.value;
 
 **Root Cause:** Having difficulties reproducing this bug. Tried funding accounts multiple times, as well as in rapid succession, but all transactions seem to be present. Will look into other methods or possible reasons why this bug is occurring.
 
-**Fix Applied:** _[...]_  
+**Attempts to Reproduce**:
+- Ran same user account with multiple `fundAccount` calls
+- Checked `transactions` table after each call
+- Tried funding accounts multiple times in rapid succession
+
+**Fix Applied:** Mitigations that have already been applied include
+- Switched to single long-lived DB connection
+- Made funding accounts an atomic operation to prevent race conditions
 
 **Preventive Measures:** _[...]_  
 
