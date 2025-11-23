@@ -38,13 +38,19 @@
 
 **Description:** Invalid email formats are accepted and case handling is inconsistent.  
 
-**Root Cause:** _[Explain root cause]_  
+**Fix Applied:**
+- Client-side: `app/signup/page.tsx` now performs stricter email validation (better regex) and detects common TLD typos (`.con`, `.cmo`, `.cm`, `.om`) and returns a helpful message (e.g., "did you mean .com?"). The UI also displays a small hint when a user types an email with uppercase characters informing them that the system will normalize the email to lowercase for login/uniqueness.
+- Server-side: `server/routers/auth.ts` now preserves the original email input for display, but canonicalizes (lowercases and trims) the email for lookup and storage to enforce uniqueness reliably. The server also performs the same TLD typo detection and rejects suspicious domains with a `BAD_REQUEST` error.
 
-**Fix Applied:** _[Explain fix, e.g., regex, zod schema, React Hook Form validation]_  
+**Preventive Measures:**
+- Normalize emails to a canonical format for storage and lookups, but preserve the user's original input for display so they aren't surprised by automatic changes.
+- Validate domains for common typos and provide helpful error messages to users.
+- Add unit tests around email normalization and common typo detection.
 
-**Preventive Measures:** _[Best practices for email validation]_  
-
-**Verification / Test:** _[Example test snippet or steps]_
+**Verification / Test:**
+- Manual: Attempt to sign up with `TEST@example.com` — account should be created using the canonical `test@example.com` for lookups but the UI should indicate the normalization and preserve the original as `displayEmail`.
+- Manual: Try `user@domain.con` — the client should warn and the server should reject with a helpful message.
+- Automated: Add tests validating the normalization behavior and rejection of common TLD typos.
 
 ---
 

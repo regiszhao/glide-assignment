@@ -94,15 +94,26 @@ export default function SignupPage() {
                 <input
                   {...register("email", {
                     required: "Email is required",
-                    pattern: {
-                      value: /^\S+@\S+$/i,
-                      message: "Invalid email address",
+                    // VAL-201
+                    validate: (value) => {
+                      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                      if (!emailPattern.test(value)) return "Invalid email address";
+                      const domain = value.split('@')[1] || '';
+                      const commonTldTypos = ['.con', '.cmo', '.cm', '.om'];
+                      for (const t of commonTldTypos) {
+                        if (domain.endsWith(t)) return `Email domain looks incorrect (did you mean ${domain.replace(t, '.com')})`;
+                      }
+                      return true;
                     },
                   })}
                   type="email"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                {/* VAL-201 Inform the user we will normalize email for login/uniqueness */}
+                {watch('email') && watch('email') !== watch('email')?.toLowerCase() && (
+                  <p className="mt-1 text-sm text-gray-500">We will normalize your email to lowercase for login and uniqueness.</p>
+                )}
               </div>
 
               <div>

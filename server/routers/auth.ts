@@ -23,7 +23,8 @@ export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
-        email: z.string().email().toLowerCase(),
+        // VAL-201
+        email: z.string().email(),
         // VAL-208
         password: z
           .string()
@@ -66,7 +67,20 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const existingUser = await db.select().from(users).where(eq(users.email, input.email)).get();
+      // VAL-201
+      // Normalize email for lookup/storage but preserve the original input for display
+      const normalizedEmail = input.email.trim().toLowerCase();
+
+      // Basic typo detection for common TLD mistakes
+      const domain = input.email.split("@")[1] || "";
+      const commonTldTypos = [".con", ".cmo", ".cm", ".om"];
+      for (const t of commonTldTypos) {
+        if (domain.endsWith(t)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Email domain looks incorrect (did you mean '${domain.replace(t, ".com")}')` });
+        }
+      }
+
+      const existingUser = await db.select().from(users).where(eq(users.email, normalizedEmail)).get();
 
       if (existingUser) {
         throw new TRPCError({
@@ -89,7 +103,8 @@ export const authRouter = router({
       const ssnLast4 = input.ssn.slice(-4);
 
       await db.insert(users).values({
-        email: input.email,
+        // store canonical lowercased email for uniqueness and lookups
+        email: normalizedEmail,
         password: hashedPassword,
         firstName: input.firstName,
         lastName: input.lastName,
@@ -104,7 +119,7 @@ export const authRouter = router({
       });
 
       // Fetch the created user
-      const user = await db.select().from(users).where(eq(users.email, input.email)).get();
+      const user = await db.select().from(users).where(eq(users.email, normalizedEmail)).get();
 
       if (!user) {
         throw new TRPCError({
@@ -138,7 +153,8 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      // Return user with password removed and include the original email input as `displayEmail`
+      return { user: { ...user, password: undefined, displayEmail: input.email }, token };
     }),
 
   login: publicProcedure
@@ -149,7 +165,8 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const user = await db.select().from(users).where(eq(users.email, input.email)).get();
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const user = await db.select().from(users).where(eq(users.email, normalizedEmail)).get();
 
       if (!user) {
         throw new TRPCError({
