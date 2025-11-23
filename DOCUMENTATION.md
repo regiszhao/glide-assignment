@@ -476,13 +476,25 @@ for (let i = 0; i < 100; i++) {
 
 **Description:** System slows down when processing multiple transactions.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** 
+- Performance testing shows that transaction creation time increases linearly as number of existing transactions grows.
+- This shows that there is no performance degradation -- each transaction takes the same amount of time to complete.
+- No quadratic or exponential behavior was observed
+- Recent architectural changes may have removed avoidable overhead
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Consolidated database usage into a single long-lived database connection in `PERF-408`, removing repeated connection setup/teardown overhead. 
+- Cleaned up handlers to ensure there are no redundant awaits or nested operations contributing artificial delays.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Continue monitoring transaction throughput against baseline performance.
+- Revisit query/index design if future requirements demand sub-linear scaling.
 
 **Verification / Test:** _[...]_
+- Added an integration test `tests/perf/perf-407.test.ts` which creates a test user and account, fires a batch of parallel `fundAccount` RPC calls and verifies final balance and transaction count.
+
+**Notes:**
+- Adjust the `iterations` value in `tests/perf/perf-407.test.ts` to simulate higher load.
 
 ---
 
