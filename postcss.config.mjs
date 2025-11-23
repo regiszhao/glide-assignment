@@ -3,14 +3,11 @@
 
 
 // USE THIS VERSION FOR NEXT.JS APP BUILD
-import autoprefixer from "autoprefixer";
-
-const config = {
-  plugins: ['@tailwindcss/postcss', autoprefixer()],
+export default {
+  plugins: {
+    '@tailwindcss/postcss': {},
+  },
 };
-
-export default config;
-
 
 
 // USE THIS VERSION FOR VITEST RUNNER
