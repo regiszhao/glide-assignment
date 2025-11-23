@@ -37,38 +37,46 @@ export const accountRouter = router({
         });
       }
 
-      let accountNumber;
-      let isUnique = false;
+      // PERF-401
+      // Perform account number generation, insert, and fetch inside a DB transaction to guarantee atomicity and avoid races where insertion succeeds but a later fetch fails or a concurrent insertion causes duplicate account numbers.
+      const created = db.transaction((tx) => {
+        let createdAccount: any = null;
+        // Limit number of tries to generate a unique account number to avoid infinite loops.
+        const maxAttempts = 5;
+        let attempt = 0;
 
-      // Generate unique account number
-      while (!isUnique) {
-        accountNumber = generateAccountNumber();
-        const existing = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber)).get();
-        isUnique = !existing;
-      }
+        while (!createdAccount && attempt < maxAttempts) {
+          attempt += 1;
+          const acctNum = generateAccountNumber();
+          try {
+            tx.insert(accounts).values({
+              userId: ctx.user.id,
+              accountNumber: acctNum,
+              accountType: input.accountType,
+              balance: 0,
+              status: "active",
+            }).run();
 
-      await db.insert(accounts).values({
-        userId: ctx.user.id,
-        accountNumber: accountNumber!,
-        accountType: input.accountType,
-        balance: 0,
-        status: "active",
+            // Read back the inserted row deterministically
+            createdAccount = tx.select().from(accounts).where(eq(accounts.accountNumber, acctNum)).get();
+          } catch (err: any) {
+            const msg = String(err?.message || err || "");
+            // If it's a unique constraint error, loop and retry. Otherwise rethrow to abort the transaction and surface the failure to the client.
+            if (msg.includes("UNIQUE") || msg.includes("constraint failed")) {
+              continue;
+            }
+            throw err;
+          }
+        }
+
+        if (!createdAccount) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create account after multiple attempts" });
+        }
+
+        return createdAccount;
       });
 
-      // Fetch the created account
-      const account = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber!)).get();
-
-      return (
-        account || {
-          id: 0,
-          userId: ctx.user.id,
-          accountNumber: accountNumber!,
-          accountType: input.accountType,
-          balance: 100,
-          status: "pending",
-          createdAt: new Date().toISOString(),
-        }
-      );
+      return created;
     }),
 
   getAccounts: protectedProcedure.query(async ({ ctx }) => {

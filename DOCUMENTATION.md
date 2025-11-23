@@ -331,19 +331,29 @@ await db.delete(sessions).where(eq(sessions.userId, user.id));
 
 ---
 
+## Logic & Performance Issues
+
 ### Ticket PERF-401: Account Creation Error
 **Priority:** Critical
 **Reported by:** Support Team  
 
 **Description:** New accounts show $100 balance when DB operations fail.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The account creation flow in `server/routers/account.ts` performed an insert and then fetched the inserted row separately. In failure modes (e.g., a partial DB error, race, or driver oddity) the insert or fetch could fail and the API previously returned a fabricated fallback account object with `balance: 100`. That caused the UI to present incorrect balances to users.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Wrapped account number generation, insert, and fetch inside a single synchronous DB transaction (`db.transaction(...)`) to guarantee atomicity and avoid partial state. The transaction performs the insert then reads back the inserted row and returns it. If the fetch or insert fails the transaction aborts and an error is thrown to the client.
+- Added a retry loop inside the transaction to handle rare collisions when generating a random account number (up to 5 attempts). If creation still fails after retries an `INTERNAL_SERVER_ERROR` is thrown rather than returning fabricated data.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Prefer performing multi-step operations inside DB transactions to ensure atomicity and avoid partial-visible states.
+- Where supported, use `RETURNING` clauses or ORM features that return the inserted row directly to avoid an extra fetch. When not available, read back the inserted row inside the same transaction.
+- Add monitoring/logging around DB errors and unique-constraint collisions to detect unusual rates of failures.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: create a new account and confirm the returned account has `balance: 0` and the account exists in the `accounts` table.
+- Manual failure simulation: temporarily inject an error into the insert path (or lock the DB) and confirm the API returns an error instead of a fabricated account object.
+- Automated: add an integration test that attempts account creation and asserts that on transient insertion failures the API surface an error and no fake account object is returned.
 
 ---
 
