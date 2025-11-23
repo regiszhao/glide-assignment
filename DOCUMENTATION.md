@@ -230,13 +230,23 @@
 
 **Description:** Only basic card prefixes detected.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The original validation in `server/routers/account.ts` and `components/FundingModal.tsx` used only a small set of prefix/length checks which excluded valid card numbers (for example, American Express with 15 digits and some other networks with 13 or 19 digits). This caused valid cards to be rejected in some cases.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Server-side: the `fundAccount` Zod schema now performs a Luhn check and accepts card numbers between 13 and 19 digits (inclusive). This change is implemented in `server/routers/account.ts` and ensures popular card lengths such as 15 (Amex) are accepted.
+- Client-side: `components/FundingModal.tsx` was updated to accept card numbers between 13 and 19 digits and to perform a Luhn check for immediate user feedback.
 
-**Preventive Measures:** _[...]_  
+Note: validation still does not attempt to map a card number to a specific brand extensively; it focuses on syntactic validity (length + Luhn). For robust card-brand detection (e.g., Visa, Mastercard, Amex, Discover) and BIN/range handling, consider using a dedicated library such as `credit-card-type` or `card-validator` which maintain up-to-date BIN ranges.
 
-**Verification / Test:** _[...]_
+**Preventive Measures:**
+- Perform both Luhn and length checks server-side to prevent false rejections while avoiding reliance on brittle prefix-only logic.
+- If business logic depends on specific card brands, adopt a tested BIN-detection library rather than ad-hoc prefix lists.
+- Add unit tests for common card number edge cases (13, 15, 16, 19 digits) and for known-good test numbers (e.g., `4111111111111111`, `378282246310005`).
+
+**Verification / Test:**
+- Manual: try funding with 15-digit Amex test number `378282246310005` — client should accept the input and server should accept the request (Luhn passes).
+- Manual: try known valid 16-digit Visa test number `4111111111111111` — should be accepted as before.
+- Automated: add tests that validate the endpoint accepts valid card numbers of lengths 13–19 and rejects numbers that fail Luhn or contain non-digit characters.
 
 ---
 

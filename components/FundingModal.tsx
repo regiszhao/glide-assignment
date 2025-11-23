@@ -120,7 +120,8 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
                 // VAL-206
                 validate: fundingType === "card"
                   ? {
-                      is16Digits: (v) => /^\d{16}$/.test(v) || "Card number must be 16 digits",
+                      // VAL-210: relaxed to 13-19 digits to support various card types
+                      isLength: (v) => /^\d{13,19}$/.test(v) || "Card number must be between 13 and 19 digits",
                       luhn: (v) => luhnCheck(v) || "Invalid card number (failed Luhn check)",
                     }
                   : {

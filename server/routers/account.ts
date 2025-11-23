@@ -100,7 +100,8 @@ export const accountRouter = router({
           })
           .superRefine((val, ctx) => {
             if (val.type === "card") {
-              if (!/^\d{16}$/.test(val.accountNumber) || !luhnCheck(val.accountNumber)) {
+              // VAL-210: relaxed to 13-19 digits to support various card types
+              if (!/^\d{13,19}$/.test(val.accountNumber) || !luhnCheck(val.accountNumber)) {
                 ctx.addIssue({
                   code: z.ZodIssueCode.custom,
                   message: "Invalid card number format or Luhn check failed",
