@@ -220,30 +220,37 @@ export const authRouter = router({
       return { user: { ...user, password: undefined }, token };
     }),
 
+  // PERF-402
   logout: publicProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user) {
-      // Delete session from database
-      let token: string | undefined;
-      if ("cookies" in ctx.req) {
-        token = (ctx.req as any).cookies.session;
-      } else {
-        const cookieHeader = ctx.req.headers.get?.("cookie") || (ctx.req.headers as any).cookie;
-        token = cookieHeader
-          ?.split("; ")
-          .find((c: string) => c.startsWith("session="))
-          ?.split("=")[1];
-      }
-      if (token) {
-        await db.delete(sessions).where(eq(sessions.token, token));
-      }
+    // Attempt to read the session token from cookies or headers
+    let token: string | undefined;
+    if ("cookies" in ctx.req) {
+      // console.log("ALL COOKIES:", (ctx.req as any).cookies); // See all cookies
+      token = (ctx.req as any).cookies.get('session')?.value;
+      // console.log("Logout via Next.js cookies:", token);
+    } else {
+      const cookieHeader = ctx.req.headers.get?.("cookie") || (ctx.req.headers as any).cookie;
+      // console.log("RAW COOKIE HEADER:", cookieHeader); // See raw cookie string
+      token = cookieHeader
+        ?.split("; ")
+        .find((c: string) => c.startsWith("session="))
+        ?.split("=")[1];
     }
 
+    // Check whether a session with this token exists, delete if present
+    let deleted = false;
+    if (token) {
+      const result = await db.delete(sessions).where(eq(sessions.token, token)).run();
+      deleted = result.changes > 0;
+    }
+
+    // Clear cookie for client regardless
     if ("setHeader" in ctx.res) {
       ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
     } else {
       (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
     }
 
-    return { success: true, message: ctx.user ? "Logged out successfully" : "No active session" };
+    return { success: deleted, message: deleted ? "Logged out successfully" : "No active session" };
   }),
 });

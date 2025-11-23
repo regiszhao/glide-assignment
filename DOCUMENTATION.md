@@ -418,13 +418,33 @@ await db.delete(sessions).where(eq(sessions.userId, user.id));
 
 **Description:** Logout reports success even when session remains active.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** 
+- The logout endpoint returned a successful response when invoked by an authenticated user even if the server-side session token was missing or not actually removed from the `sessions` table.
+- The handler cleared the client's cookie but did not verify whether a matching server-side session row existed or was deleted, so clients could be told they were logged out while a valid session still existed server-side.
+- Furthermore, the cookies were being incorrectly accessed in the first place; the following line was returning `undefined`, preventing the deletion of the session and keeping the session active:
+```
+token = (ctx.req as any).cookies.session;
+```
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Next.js `RequestCookies` needs to be accessed with `.get()`:
+```
+token = (ctx.req as any).cookies.get('session')?.value;
+```
+- The `logout` mutation now reads the session token from the request cookie or cookie header and checks whether a matching session row exists in the `sessions` table.
+- It deletes the session row only when a matching row is found and returns `{ success: true }` only when the deletion actually occurred.
+- The handler still clears the client cookie to remove the client-side token regardless of whether a server-side session existed.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Make server-side session state authoritative: only report a successful logout when a server-side session record was actually invalidated.
+- Always verify the effect of destructive actions (deletes/updates) and reflect outcome accurately in API responses.
+- Add tests for logout behavior (both success when session exists and clear/fail when it does not) and instrument session creation/deletion metrics for monitoring.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Start the app and create a session (login or signup). Confirm the session token is present in cookies and a matching row exists in the `sessions` table.
+- Call the logout endpoint from the UI or via an HTTP client. Confirm the response reports success and the session row is removed from the database.
+- Call logout again using the same cookie — the endpoint should return `{ success: false, message: "No active session" }` and the cookie should be cleared.
+- Attempt logout with no cookie — the endpoint should return `{ success: false, message: "No active session" }` and ensure the client cookie is cleared.
 
 ---
 
