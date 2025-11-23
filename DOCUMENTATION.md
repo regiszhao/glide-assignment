@@ -487,7 +487,7 @@ for (let i = 0; i < 100; i++) {
 
 **Fix Applied:**
 - Consolidated the DB initialization to a single long-lived `better-sqlite3` connection (`sqlite`) that is wrapped by Drizzle (`db`) and used across the app (`lib/db/index.ts`). Removed the unused `connections` array and prevented creating extra connections on import.
-- Added graceful shutdown handlers in `lib/db/index.ts` to close the SQLite connection on process exit or fatal signals (`SIGINT`, `SIGTERM`, `beforeExit`, `uncaughtException`, `unhandledRejection`). The shutdown handler calls `sqlite.close()` and logs the action.
+- Added graceful shutdown handlers in `lib/db/index.ts` to close the SQLite connection on process exit or fatal signals (`SIGINT`, `SIGTERM`, `uncaughtException`, `unhandledRejection`). The shutdown handler calls `sqlite.close()` and logs the action.
 - Reviewed local scripts (e.g., `scripts/db-utils.js`) to ensure they call `db.close()`.
 
 **Preventive Measures:**

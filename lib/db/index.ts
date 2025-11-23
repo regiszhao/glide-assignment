@@ -81,11 +81,6 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
-// beforeExit is emitted before the event loop is empty - ensures connection is close even if nothing else is keeping Node alive
-process.on("beforeExit", () => {
-  closeSqliteConnection();
-});
-
 process.on("uncaughtException", (err) => {
   // eslint-disable-next-line no-console
   console.error("Uncaught exception, closing SQLite connection:", err);
