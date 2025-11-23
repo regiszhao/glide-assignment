@@ -84,13 +84,22 @@
 
 **Description:** Invalid state codes like 'XX' are accepted.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The signup form and server-side schema accepted any 2-letter string as a state code (or uppercased it server-side) but did not restrict values to the official USPS two-letter state codes. This allowed invalid values like `XX` to pass validation and caused downstream address verification errors.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Created `lib/constants.ts` to store constants -- in this case, a list of US States.
+- Client-side: `app/signup/page.tsx` now validates the `state` input against a whitelist of valid 2-letter US state codes (including `DC`). The check is case-insensitive (input is uppercased for validation) and returns a clear message when invalid.
+- Server-side: `server/routers/auth.ts` now enforces the same whitelist in the Zod schema for `signup` (transforms the input to uppercase and rejects values not in the allowed set). Server-side validation is authoritative and will reject invalid state codes even if client-side checks are bypassed.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Use a canonical whitelist for state/region codes on both client and server; consider extracting the list into a shared module if used in multiple places.
+- If you accept international addresses, add a country selector and validate state/province codes per country accordingly.
+- Add unit tests for address field validation to prevent regressions.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: attempt to sign up with `state: 'XX'` — client should show "Use a valid 2-letter US state code" and the server should reject if the client is bypassed.
+- Manual: sign up with `state: 'ca'` (lowercase) — client should accept after normalization and server should store `CA`.
+- Automated: add tests that assert server rejects invalid state codes and accepts all official US state codes plus `DC`.
 
 ---
 
@@ -100,13 +109,20 @@
 
 **Description:** International phone numbers not validated properly.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The client-side signup form (`app/signup/page.tsx`) validated phone numbers as exactly 10 digits (US-only), while the server-side Zod schema permitted a different pattern. This led to inconsistent behavior and allowed some non-international-friendly inputs (or invalid local-only numbers) to pass or fail unexpectedly.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Client-side: `app/signup/page.tsx` now validates phone numbers using an international-friendly pattern: optional leading `+` and between 7 and 15 digits (regex: `^\+?\d{7,15}$`). The input placeholder shows an international example (e.g., `+12135551234`).
+- Server-side: `server/routers/auth.ts` phone validation updated to accept the same format (optional `+`, 7–15 digits). The server returns a validation error if the input doesn't match this pattern.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- For robust phone validation and formatting, use a dedicated library such as `libphonenumber-js` or Google's `libphonenumber` via a lightweight wrapper. Those libraries handle country-specific rules, formatting, and normalization to E.164.
+- Keep client and server validation in sync or share a small validation helper to avoid mismatches.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: try signup with international numbers such as `+442071838750` or `+12135551234` — client should accept and server should accept the request.
+- Manual: try an invalid phone like `12345` — client should reject with a clear message and server should also reject if bypassed.
+- Automated: add unit tests validating a set of known-good and known-bad numbers, or integrate `libphonenumber-js` in tests to assert normalization to E.164.
 
 ---
 

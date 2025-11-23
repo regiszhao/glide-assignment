@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
+// VAL-203
+import { US_STATES } from "@/lib/constants";
 
 type SignupFormData = {
   email: string;
@@ -200,13 +202,14 @@ export default function SignupPage() {
                 <input
                   {...register("phoneNumber", {
                     required: "Phone number is required",
+                    // VAL-204: accept international numbers in E.164-ish format (optional leading +, 7-15 digits)
                     pattern: {
-                      value: /^\d{10}$/,
-                      message: "Phone number must be 10 digits",
+                      value: /^\+?\d{7,15}$/,
+                      message: "Enter a valid phone number (digits only, may start with +)",
                     },
                   })}
                   type="tel"
-                  placeholder="1234567890"
+                  placeholder="+12135551234"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
                 {errors.phoneNumber && <p className="mt-1 text-sm text-red-600">{errors.phoneNumber.message}</p>}
@@ -288,9 +291,10 @@ export default function SignupPage() {
                   <input
                     {...register("state", {
                       required: "State is required",
-                      pattern: {
-                        value: /^[A-Z]{2}$/,
-                        message: "Use 2-letter state code",
+                      // VAL-203: enforce valid US state codes (2-letter)
+                      validate: (v) => {
+                        const val = (v || "").toUpperCase();
+                        return US_STATES.includes(val) || "Use a valid 2-letter US state code";
                       },
                     })}
                     type="text"

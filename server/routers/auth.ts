@@ -7,6 +7,8 @@ import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+// VAL-203
+import { US_STATES } from "@/lib/constants";
 
 // VAL-202
 function calculateAgeFromISO(dateStr: string): number {
@@ -39,7 +41,8 @@ export const authRouter = router({
           }, { message: "Password is too common" }),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
-        phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
+        // VAL-204: accept international phone numbers (optional leading +, 7-15 digits)
+        phoneNumber: z.string().regex(/^\+?\d{7,15}$/, { message: "Phone number must be digits (optional leading +) and between 7 and 15 characters" }),
         // VAL-202
         dateOfBirth: z
           .string()
@@ -62,7 +65,14 @@ export const authRouter = router({
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
-        state: z.string().length(2).toUpperCase(),
+        // VAL-203: enforce valid US state codes (2-letter)
+        state: z
+          .string()
+          .length(2)
+          .transform((s) => s.toUpperCase())
+          .refine((s) => {
+            return US_STATES.includes(s);
+          }, { message: "State must be a valid 2-letter US state code" }),
         zipCode: z.string().regex(/^\d{5}$/),
       })
     )
