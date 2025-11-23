@@ -1,6 +1,6 @@
-# SecureBank Technical Take-Home
+# Glide Technical Take-Home
 **Author:** Regis Zhao  
-**Date:** 2025-11-21  
+**Date:** 2025-11-23  
 
 ---
 
@@ -9,8 +9,13 @@
 - [Validation Issues](#validation-issues)
 - [Security Issues](#security-issues)
 - [Logic & Performance Issues](#logic--performance-issues)
+- [Testing](#testing)
 
 ---
+
+### NOTE: Code Annotations for Ticket Tracking
+For each ticket, I’ve added a comment with the ticket number (e.g., `// SEC-304`) in the code wherever changes were made. This makes it easier for developers and reviewers to locate relevant modifications for that ticket.
+
 
 ## UI Issues
 
@@ -530,9 +535,14 @@ token = (ctx.req as any).cookies.get('session')?.value;
 - Switched to single long-lived DB connection
 - Made funding accounts an atomic operation to prevent race conditions
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Add a DB index on `transactions(account_id, created_at)` to ensure efficient per-account lookups and reduce the chance that slow/incorrect queries mask missing rows.
+- Add monitoring/alerts for failed inserts or unexpected shortfalls in transaction counts after batch operations (e.g., compare requested vs persisted counts in a background job).
+- Expand integration and concurrency tests (see PERF-407) and run them in CI to catch lost-write or race conditions early.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Automated: add an integration test that issues many concurrent `fundAccount` RPC calls (or reuse the `tests/perf/perf-407.test.ts` harness) and asserts the final account `balance` equals the sum of successful transactions and that the `transactions` table contains the expected number of rows.
+- Manual: run parallel funding from multiple clients against a single account and verify via direct DB queries that each funding produced a transaction row and that the persisted balance matches the expected total.
 
 ---
 
@@ -621,3 +631,34 @@ for (let i = 0; i < 100; i++) {
 - Automated: add an integration test or monitoring script that records open file descriptors before and after starting/stopping the server; assert no descriptor leak.
 
 **Files changed:** `lib/db/index.ts` — consolidated connection handling and added graceful shutdown logic.
+
+---
+
+## Testing
+
+- **What I set up (preliminary):** I added Vitest as the test runner and created a small suite of smoke and integration tests under `tests/` and `tests/integration/` respectively. The smoke tests validate visible fixes in documentation and simple file-level checks; integration tests exercise server RPC handlers (e.g., `signup`/`login`/`logout`, `fundAccount`) against the real application code and DB helper.
+- **Example integration tests added:** `tests/integration/SEC-304.integration.test.ts`, `tests/integration/PERF-402.integration.test.ts`, `tests/integration/VAL-205.integration.test.ts`, and `tests/perf/perf-407.test.ts`  — these cover session invalidation, logout semantics, `fundAccount` validation + balance update, and performance degradation.
+- **How to run the tests:** Vitest requires ESM syntax for PostCSS config but for some reason this breaks the Next.js app build. I am switching between the two as a temporary workaround. See comments in `postcss.config.mjs` for more details.
+
+  ```powershell
+  # Run all tests
+  npx vitest run
+
+  # Run only integration tests
+  npx vitest run tests/integration --reporter verbose
+  ```
+- **Environment notes:** Some integration tests rely on environment variables such as `SSN_HASH_SECRET` and `JWT_SECRET`. Tests provide reasonable defaults when missing, but for closer parity with production behavior set these env vars prior to running tests.
+- **Test DB / Isolation:** Integration tests currently use the project's `lib/db` helper which opens the configured SQLite DB. For robust test isolation I recommend configuring a separate test DB (or an in-memory DB) and passing that path via env (e.g., `TEST_DB_PATH`) when running integration suites to avoid interfering with a developer's local data.
+- **Plan for more robust testing (per-ticket integration tests):** For each ticket, I planned on adding at least one integration test that exercises the full flow described under the ticket, for example:
+
+  - Authentication tickets (SEC-3xx): create a test user via `signup`, assert `sessions` rows, perform `login`/`logout` and assert server-side session state and cookie behavior. Clean up created rows after the test.
+  - Account lifecycle (PERF-4xx / VAL-2xx): create a user and account, call `fundAccount` with valid/invalid inputs (card vs bank), assert balance and `transactions` rows, and verify ordering/atomicity under multiple calls.
+  - Validation tickets (VAL-2xx): call the relevant RPC/mutation with invalid inputs and assert server responds with validation errors (Zod `BAD_REQUEST`) and that the DB state is unchanged.
+
+- **How to structure new integration tests:**
+
+  - Use `router.createCaller(...)` for RPC calls to avoid starting an HTTP server.
+  - Seed only the rows you need (user, account) and remove them in `afterAll` to keep tests idempotent.
+  - Prefer `db.transaction(...)` blocks for setup/teardown when cleaning multiple dependent rows.
+
+- **Next steps to increase coverage:** convert additional per-ticket smoke tests into integration tests for the highest-risk tickets first (session/account/funding/transactions), add concurrency/stress tests for `fundAccount` (PERF-406/PERF-407 scenarios), and wire the suite into CI with a dedicated test DB and reproducible env settings.
