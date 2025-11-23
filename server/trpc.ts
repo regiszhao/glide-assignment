@@ -54,11 +54,30 @@ export async function createContext(opts: CreateNextContextOptions | FetchCreate
 
       const session = await db.select().from(sessions).where(eq(sessions.token, token)).get();
 
+      // PERF-403
       if (session && new Date(session.expiresAt) > new Date()) {
-        user = await db.select().from(users).where(eq(users.id, decoded.userId)).get();
-        const expiresIn = new Date(session.expiresAt).getTime() - new Date().getTime();
-        if (expiresIn < 60000) {
-          console.warn("Session about to expire");
+        const now = Date.now();
+        const expiresIn = new Date(session.expiresAt).getTime() - now;
+
+        // Buffer before official expiry during which the server will treat the session as expired for security reasons (that are unclear to me)
+        const bufferMs = Number(process.env.SESSION_EXPIRY_BUFFER_MS ?? "60000");
+
+        if (expiresIn <= bufferMs) {
+          // Session is too close to expiry — invalidate it proactively
+          try {
+            await db.delete(sessions).where(eq(sessions.token, token));
+          } catch (err) {
+            // If deletion fails, log and continue to treat as invalid
+            // eslint-disable-next-line no-console
+            console.warn("Failed to delete near-expiry session:", err);
+          }
+        } else {
+          // Session has sufficient remaining lifetime — load the user
+          user = await db.select().from(users).where(eq(users.id, decoded.userId)).get();
+          if (expiresIn < bufferMs * 5) {
+            // warn if session will expire soon (but not within the buffer window)
+            console.warn("Session will expire soon");
+          }
         }
       }
     } catch (error) {

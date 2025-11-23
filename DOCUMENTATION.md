@@ -379,13 +379,22 @@ await db.delete(sessions).where(eq(sessions.userId, user.id));
 
 **Description:** Expiring sessions still considered valid until exact expiry time.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** In `server/trpc.ts`, we see that the server treats a session as valid up until its exact expiry timestamp. This created a small window of elevated risk where a token that was only seconds from expiration could still be used to perform sensitive actions.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Server-side: the request context creation now treats sessions that are within a small configurable buffer of expiry as expired and proactively invalidates them. The buffer is configurable via the environment variable `SESSION_EXPIRY_BUFFER_MS` (default: `60000` ms = 1 minute). If a session has <= buffer remaining, the server deletes the session row and treats the request as unauthenticated.
+- This behavior is implemented in `server/trpc.ts` within `createContext()`
+- Note that it is unclear to me why early invalidation is different from just moving the expiry time up. The risk window is the same, just shifted earlier.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Use a configurable safety buffer for session validity checks to avoid allowing very-near-expiry tokens to be used. This reduces time-of-use risk when tokens are close to their expiry boundary.
+- Consider implementing a proper refresh-token flow instead of long-lived single tokens. With refresh tokens you can issue short-lived access tokens and refresh them securely when necessary.
+- Add monitoring/alerts for high rates of session invalidations or refresh failures to detect systemic issues.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: set `SESSION_EXPIRY_BUFFER_MS=60000` (default) and create a session with an expiry timestamp 30 seconds in the future; requests using that token should be rejected as unauthorized and the session row should be removed from the `sessions` table.
+- Manual: create a session with more than `buffer` remaining and confirm requests succeed.
+- Automated: add integration tests that simulate tokens with various remaining lifetimes and assert the server accepts/rejects according to the configured buffer.
 
 ---
 
