@@ -91,22 +91,41 @@ export const accountRouter = router({
         accountId: z.number(),
         // VAL-205: disallow zero-amount funding; require at least $0.01
         amount: z.number().min(0.01, { message: "Amount must be at least $0.01" }),
-        // VAL-206
+        // VAL-206, VAL-207
         fundingSource: z
           .object({
             type: z.enum(["card", "bank"]),
             accountNumber: z.string(),
             routingNumber: z.string().optional(),
           })
-          .refine((val) => {
+          .superRefine((val, ctx) => {
             if (val.type === "card") {
-              return /^\d{16}$/.test(val.accountNumber) && luhnCheck(val.accountNumber);
-            } else {
-              return /^\d+$/.test(val.accountNumber);
+              if (!/^\d{16}$/.test(val.accountNumber) || !luhnCheck(val.accountNumber)) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  message: "Invalid card number format or Luhn check failed",
+                  path: ["accountNumber"],
+                });
+              }
+            } else if (val.type === "bank") {
+              // bank: account number should be numeric
+              if (!/^\d+$/.test(val.accountNumber)) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  message: "Invalid bank account number; only digits allowed",
+                  path: ["accountNumber"],
+                });
+              }
+
+              // VAL-207: routing number required for bank transfers and must be 9 digits
+              if (!val.routingNumber || !/^\d{9}$/.test(val.routingNumber)) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  message: "Routing number is required for bank transfers and must be 9 digits",
+                  path: ["routingNumber"],
+                });
+              }
             }
-          }, {
-            message: "Invalid card/account number (must be 16 digits and pass Luhn for cards)",
-            path: ["accountNumber"],
           }),
       })
     )

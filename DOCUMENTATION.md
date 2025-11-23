@@ -165,13 +165,21 @@
 
 **Description:** Bank transfers submitted without routing numbers.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The client sometimes submitted bank funding requests without `routingNumber`, and server-side validation did not require or validate routing numbers when `fundingSource.type` was `bank`. This allowed incomplete ACH transfer requests to be created which subsequently failed during processing.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Client-side: the funding UI (`components/FundingModal.tsx`) already marks the routing number input as required when the funding type is `bank`. (No change required here beyond existing behavior.)
+- Server-side: strengthened the Zod validation for the `fundAccount` procedure in `server/routers/account.ts` to require a `routingNumber` when `fundingSource.type === 'bank'` and to validate that the routing number is exactly 9 digits. Validation is implemented with `superRefine(...)` so field-specific errors are returned for `accountNumber` or `routingNumber` as appropriate.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Always validate interdependent input fields server-side (e.g., require routing numbers when funding type is `bank`) — client-side checks are helpful but not authoritative.
+- Add unit/integration tests that exercise funding with different `fundingSource.type` values to ensure required fields are enforced.
+- Log and monitor failed funding attempts that are missing required banking fields so support can proactively surface patterns from user reports.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: attempt to call the `fundAccount` RPC (or submit the funding form) with `fundingSource.type: 'bank'` and omit `routingNumber` — the server should return a validation error indicating the routing number is required and must be 9 digits.
+- Manual: supply an invalid routing number (e.g., `12345678`) and verify the server rejects it with the same validation error.
+- Automated: add a unit/integration test that calls the `fundAccount` procedure for both `card` and `bank` funding sources; assert that `bank` requests without `routingNumber` are rejected and valid `bank` requests succeed.
 
 ---
 
