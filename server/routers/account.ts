@@ -89,7 +89,8 @@ export const accountRouter = router({
     .input(
       z.object({
         accountId: z.number(),
-        amount: z.number().positive(),
+        // VAL-205: disallow zero-amount funding; require at least $0.01
+        amount: z.number().min(0.01, { message: "Amount must be at least $0.01" }),
         // VAL-206
         fundingSource: z
           .object({

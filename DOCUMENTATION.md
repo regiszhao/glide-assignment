@@ -116,13 +116,20 @@
 
 **Description:** Funding requests of $0.00 are accepted.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The client-side validation allowed values that could be parsed as zero (e.g. "0.00") and server-side checks were permissive in some cases. This led to zero-amount funding requests creating unnecessary transaction records.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Client-side: `components/FundingModal.tsx` now validates the amount string and enforces a minimum of `$0.01` via a custom `validate` function, ensuring users cannot submit `0.00`.
+- Server-side: `server/routers/account.ts` now requires `amount` to be a number >= `0.01` (Zod `min(0.01)`), so any bypass of client checks is rejected server-side with a clear error message.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Always enforce monetary lower/upper bounds both client- and server-side; server-side is authoritative.
+- Consider normalizing monetary inputs to integer cents early in the request pipeline to avoid floating-point edge cases.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: attempt to fund with `0.00` — client should reject with "Amount must be at least $0.01".
+- Manual: bypass client checks (e.g., craft API call) and send `amount: 0` — server should reject the request with a `BAD_REQUEST`/validation error.
+- Automated: add unit tests to assert client validation and server-side Zod enforcement behave as expected.
 
 ---
 
