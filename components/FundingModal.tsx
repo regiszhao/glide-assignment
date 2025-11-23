@@ -72,9 +72,10 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
               <input
                 {...register("amount", {
                   required: "Amount is required",
+                  // VAL-209: prevent multiple leading zeros. Accept either '0' or a non-zero-leading integer, optional 1-2 decimal places.
                   pattern: {
-                    value: /^\d+\.?\d{0,2}$/,
-                    message: "Invalid amount format",
+                    value: /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/,
+                    message: "Invalid amount format (no leading zeros, up to 2 decimal places)",
                   },
                   // VAL-205
                   validate: {

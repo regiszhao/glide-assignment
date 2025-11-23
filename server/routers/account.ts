@@ -131,7 +131,9 @@ export const accountRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const amount = parseFloat(input.amount.toString());
+      // VAL-209
+      // Normalize amount to a number rounded to 2 decimals to avoid storing values with excess precision
+      const amount = Number(parseFloat(input.amount.toString()).toFixed(2));
 
       // Verify account belongs to user
       const account = await db
@@ -161,10 +163,11 @@ export const accountRouter = router({
       // Note: for the SQLite driver in this project the transaction callback must be synchronous (cannot return a Promise).
       const { transaction: createdTransaction, newBalance } = db.transaction((tx) => {
         // insert the transaction with explicit createdAt/processedAt
+        // store the amount rounded to cents
         tx.insert(transactions).values({
           accountId: input.accountId,
           type: "deposit",
-          amount,
+          amount: amount, // VAL-209
           description: `Funding from ${input.fundingSource.type}`,
           status: "completed",
           createdAt: nowIso,

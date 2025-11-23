@@ -230,13 +230,21 @@
 
 **Description:** Multiple leading zeros accepted.  
 
-**Root Cause:** _[...]_  
+**Root Cause:** The client (in `components/FundingModal.tsx`) accepted amount strings with arbitrary leading zeros (e.g., `0001.00` or `00.50`) due to a permissive regex. These formats are confusing in transaction records and can lead to inconsistent display or interpretation across systems.
 
-**Fix Applied:** _[...]_  
+**Fix Applied:**
+- Client-side: `components/FundingModal.tsx` now enforces a stricter amount format: either `0` or a non-zero-leading integer, with an optional decimal fraction of 1–2 digits (regex: `^(?:0|[1-9]\d*)(?:\.\d{1,2})?$`). This disallows inputs like `00.50` or `0001` but permits `0.50`, `1.00`, `10.5`, and `100.00`.
+- Server-side: `server/routers/account.ts` now normalizes and rounds the incoming `amount` to two decimals (`Number(parseFloat(...).toFixed(2))`) before inserting the `transactions` row and updating balances. This ensures the stored transaction amount is always in cents precision and avoids floating-point artifacts.
 
-**Preventive Measures:** _[...]_  
+**Preventive Measures:**
+- Keep a shared validation rule for monetary inputs between client and server or centralize parsing/normalization server-side.
+- Consider storing money as integer cents in the DB to eliminate floating-point rounding concerns and make formatting/display a presentation concern.
+- Add unit tests for amount parsing/validation covering edge cases like `0.5`, `00.50`, `000`, `100.0001`, and negative values.
 
-**Verification / Test:** _[...]_
+**Verification / Test:**
+- Manual: try entering `00.50` or `0001` in the funding form — client should reject with "Invalid amount format (no leading zeros, up to 2 decimal places)".
+- Manual: submit `0.5` or `1.00` — client should accept and the server should store `0.50` and `1.00` respectively (rounded to two decimals).
+- Automated: add tests that assert server-rounding to two decimals and client rejects improperly formatted leading-zero inputs.
 
 ---
 
